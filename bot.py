@@ -62,20 +62,49 @@ SYSTEM_PROMPT = """Ты — ведущий денежной коучингово
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    sessions[chat_id] = []
-    await update.message.reply_text(
-        "Привет. Я денежный коуч.\n\n"
-        "Расскажи что сейчас происходит с деньгами — и мы начнём.\n\n"
-        "Если захочешь начать заново, напиши /new"
-    )
+
+    # Открываем сессию с первым сообщением от коуча через Claude
+    opening_prompt = "Пользователь только что открыл бота командой /start. Поприветствуй его и сразу начни сессию — скажи кратко что здесь происходит и задай первый вопрос про ощущение от денег. Будь живым и тёплым, не формальным."
+    sessions[chat_id] = [{"role": "user", "content": opening_prompt}]
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    try:
+        response = claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            system=SYSTEM_PROMPT,
+            messages=sessions[chat_id],
+        )
+        opening = response.content[0].text
+        sessions[chat_id].append({"role": "assistant", "content": opening})
+        await update.message.reply_text(opening + "\n\n_(напиши /new чтобы начать заново)_", parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Claude API error on start: {e}")
+        await update.message.reply_text("Привет. Расскажи что сейчас происходит с деньгами — не цифры, а ощущение.")
 
 
 async def new_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    sessions[chat_id] = []
-    await update.message.reply_text(
-        "Начинаем новую сессию.\n\nРасскажи что сейчас происходит с деньгами."
-    )
+
+    opening_prompt = "Пользователь начинает новую сессию. Поприветствуй коротко и сразу задай первый вопрос про ощущение от денег."
+    sessions[chat_id] = [{"role": "user", "content": opening_prompt}]
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    try:
+        response = claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            system=SYSTEM_PROMPT,
+            messages=sessions[chat_id],
+        )
+        opening = response.content[0].text
+        sessions[chat_id].append({"role": "assistant", "content": opening})
+        await update.message.reply_text(opening, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Claude API error on new: {e}")
+        await update.message.reply_text("Новая сессия. Что сейчас происходит с деньгами — не цифры, а ощущение?")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
